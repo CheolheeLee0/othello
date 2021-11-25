@@ -4,48 +4,40 @@
 #include <vector>
 #include <regex>
 
-const bool PLAY_AI = true; // 게임 시작 flag 변수
+const bool PLAY_AI = false; // 상대를 AI로 할 것 인지 또는 player2로 할 것인지 정함
 const int MINIMAX_DEPTH = 5; // depth of the game tree search
 const bool DEBUG_MODE = false;
 
-// flips appropriate pieces after a disc is placed down (called after verifying the move isFlippable)
-// 뒤집기
+// player가 (row, col)위치에 돌을 놓으면 오델로 규칙에 맞는 돌을 뒤집는다.
 void flip(char(&board)[8][8], int row, int col, char player) {
-    // declare a list of positions of discs that will be flipped
-    // e.g. {{0,1}, {0,2}} means disc at location board[0][1] & board[0][2] will be flipped
+    // 뒤집힐 돌의 위치를 저장한다. {{0,1}. {0,2}} 형태
     std::vector<std::vector<int>> discs_to_flip;
 
     char otherPlayer = (player == 'b') ? 'w' : 'b';
 
-    // use deltas to find all 8 surrounding positions
-    int surroundingPosDeltas[8][2] = { {-1, -1}, {-1, 0}, {-1, 1}, // 3 positions above
-                                      {0, -1}, {0, 1}, // 2 positions on same row
-                                      {1, -1}, {1, 0}, {1, 1} }; // 3 positions below
+    // 8개의 상하좌우(4개), 대각선 방향(4개)의 변화값
+    int surroundingPosDeltas[8][2] = 
+        { {-1, -1}, {-1, 0}, {-1, 1},
+        {0, -1}, {0, 1},
+        {1, -1}, {1, 0}, {1, 1} };
 
-    // for every delta representing a neighboring position...
+    // 8개의 방향에 대하여 
     for (auto deltas : surroundingPosDeltas) {
-        //std::cout << "deltas: [" << deltas[0] << ", " << deltas[1] << "]" << '\n';
-
-        // save what row/col currently on
+        // 변화값을 더한 후의 row, col 값
         int curr_row = row + deltas[0];
         int curr_col = col + deltas[1];
 
-        // ignore if this goes off of the board
+        // board의 범위를 벗어나는 돌은 무시한다.
         if (curr_row > 7 || curr_row < 0 || curr_col > 7 || curr_col < 0)
             continue;
 
-
-        // save character in this position
+        // 변화된 위치의 char (b or w)
         char char_in_pos = board[curr_row][curr_col];
 
-        // use this variable to save whether or not a line of pieces should be flipped
         bool flip_this_direction = false;
 
-        // if the character in this delta position is the opponent's piece...
         if (char_in_pos == otherPlayer) {
-            //std::cout << "Found other player at location: [" << curr_row << ", " << curr_col << "], " << char_in_pos << '\n';
-
-            // continue in this delta position until the next character is no longer the opponent's or you go off the board
+            // char_in_pos 방향에서 마지막 돌의 위치를 char_in_pos에 저장한다.
             while (char_in_pos == otherPlayer) {
                 curr_row += deltas[0];
                 curr_col += deltas[1];
@@ -58,159 +50,133 @@ void flip(char(&board)[8][8], int row, int col, char player) {
                 char_in_pos = board[curr_row][curr_col];
             }
 
-            // if the player's piece is found after traversing over the opponent's piece(s), we know we will be flipping
+            // 마지막 돌의 위치가 본인이면 뒤집는다.
             if (char_in_pos == player)
                 flip_this_direction = true;
 
-            // if we found out we should be flipping...
             if (flip_this_direction) {
-                // save current position
                 curr_row = row + deltas[0];
                 curr_col = col + deltas[1];
                 char_in_pos = board[curr_row][curr_col];
 
-                // traverse over the opponent's pieces, while saving the positions to the big list to be flipped later
+                // b - w - w - w - b => b - b - b - b - b
                 while (char_in_pos == otherPlayer) {
-                    //std::cout << "flipping [" << curr_row << ", " << curr_col << "]\n";
+                    // 뒤집을 돌의 위치를 discs_to_flip에 추가한다.
                     std::vector<int> disc = { curr_row, curr_col };
                     discs_to_flip.push_back(disc);
                     curr_row += deltas[0];
                     curr_col += deltas[1];
 
-                    // save next character
                     char_in_pos = board[curr_row][curr_col];
                 }
-
             }
         }
     }
-
-    // after we've collecting the row/col of all discs to flipped, flip them to the current player's color/character
+    // discs_to_flip 안의 위치값에 해당하는 값을 모두 뒤집는다.
     for (auto pos : discs_to_flip)
         board[pos[0]][pos[1]] = player;
 }
 
-// a move "isFlippable" if it causes pieces to flip
+// (row, col)를 기준으로 거리 상관없이 8개의 방향에 대해서 돌을 놓으면 상대 말을 뒤집을 수 있는지 반환한다. (true, false)
 bool isFlippable(char board[8][8], int row, int col, char player) {
     char otherPlayer = (player == 'b') ? 'w' : 'b';
 
-    // Check all 8 surround positions
-    int surroundingPosDeltas[8][2] = { {-1, -1}, {-1, 0}, {-1, 1}, // 3 positions above
-                                      {0, -1}, {0, 1}, // 2 positions on same row
-                                      {1, -1}, {1, 0}, {1, 1} }; // 3 positions below
+    // 8개의 상하좌우(4개), 대각선 방향(4개)의 변화값
+    int surroundingPosDeltas[8][2] =
+        { {-1, -1}, {-1, 0}, {-1, 1},
+        {0, -1}, {0, 1},
+        {1, -1}, {1, 0}, {1, 1} };
 
-    // for every delta of the surrounding positions
+    // 8개의 방향에 대하여
     for (auto deltas : surroundingPosDeltas) {
-
-        // skip if the position is off of game board
+        // board 범위를 넘어가면 무시한다.
         if (row + deltas[0] > 7 || row + deltas[0] < 0 || col + deltas[1] > 7 || col + deltas[1] < 0) {
             continue;
         }
+        // 해당 방향의 거리가 1인 위치의 돌
+        char char_in_pos = board[row + deltas[0]][col + deltas[1]];
 
-        //std::cout << "deltas: [" << deltas[0] << ", " << deltas[1] << "]" << '\n';
-        char char_in_pos = board[row + deltas[0]][col + deltas[1]]; // grab the character in that spot
-
-        // if the character in this delta spot is the opponent's piece...
+        // 해당 방향의 거리가 1인 위치의 돌이 상대 돌일 때,
         if (char_in_pos == otherPlayer) {
-            // save spot's row and col #
             int curr_row = row + deltas[0];
             int curr_col = col + deltas[1];
-
-            //std::cout << "Found other player at location: [" << curr_row << ", " << curr_col << "], " << char_in_pos << '\n';
-
-            //continue along this delta trajectory until you stop seeing the opponent's pieces
+            
+            // 해당 방향의 마지막 돌을 char_in_pos에 저장한다.
             while (char_in_pos == otherPlayer) {
                 curr_row += deltas[0];
                 curr_col += deltas[1];
 
-                // check to see if new position is off board
                 if (curr_row > 7 || curr_row < 0 || curr_col > 7 || curr_row < 0)
                     break;
 
-                // save the next character
                 char_in_pos = board[curr_row][curr_col];
             }
 
-            // if the player's piece is seen after one (+more) of the opponent's pieces, the original move is a flippable one
+            // 마지막 돌이 player이면
             if (char_in_pos == player)
                 return true;
         }
     }
-
-    // if no flippable spot is found after checking all surrounding positions, the original move is not a flippable one
     return false;
 }
 
-// set board[row][col] to player's piece, and flip appropriate pieces
+// 돌을 (row, col)에 놓는다.
 void makeMove(char(&board)[8][8], int row, int col, char player) {
-    //std::cout << "Updating row: " << row << " col: " << col << '\n';
-    // set provided row/col position to the player's character piece
+    // 돌을 놓고
     board[row][col] = player;
-
-    // flip discs from resulting move
+    // 뒤집는다.
     flip(board, row, col, player);
 }
 
-// used to algorithmically calculate legal moves belonging to passed-in player
+// player의 돌을 놓을 수 있는 자리를 구해 vector로 반환한다.
 std::vector<std::vector<int>> calculateLegalMoves(char board[8][8], char player) {
-
-    // declare main move list
     std::vector<std::vector<int>> move_list;
-
+    // 모든 board의 위치에 대해서
     for (int i = 0; i < 8; ++i) {
         for (int j = 0; j < 8; ++j) {
-            // first make sure the spot is empty
+            // 빈자리에 대해서
             if (board[i][j] == '-') {
-
-                // check to see if placing a piece there will flip one (+more) of the opponent's pieces
+                // (i, j)에 놓으면 상대방의 말을 뒤집을 수 있는지 확인하고
                 if (isFlippable(board, i, j, player)) {
-
-                    // if so, create a 2-element vector representative of the move and push it to the big move list
+                    // 뒤집을 수 있으면 move_list에 추가한다.
                     std::vector<int> move = { i, j };
                     move_list.push_back(move);
                 }
             }
         }
     }
-
     return move_list;
-
 }
 
-// for a given board configuration, determine if a move is legal (searches through a previously generated movelist)
+// 돌을 놓을 수 있는 자리에 (row, col)가 포함되어 있는지 확인한다.
 bool isLegalMove(char board[8][8], std::vector<std::vector<int>> move_list, int row, int col, char player) {
     std::vector<int> proposedMove = { row, col };
-    //    for (int i : proposedMove) {
-    //        std::cout << i << ' ';
-    //    }
-
-        //This error should NOT occur, as the regex pattern validates the user's input
+   
+    // board의 범위를 벗어나면 error
     if (row > 7 || row < 0 || col > 7 || col < 0)
         throw std::range_error{ "isLegalMove()" };
 
-    // Make sure position is empty
+    // 돌이 이미 놓여져 있으면
     if (board[row][col] != '-') {
         return false;
     }
-
     if (std::find(move_list.begin(), move_list.end(), proposedMove) != move_list.end()) {
         return true;
     }
-
     return false;
 }
 
-// return a list of all the moves available to black
+// 검은 돌을 놓을 수 있는 자리를 반환
 std::vector<std::vector<int>> getBlackLegalMoves(char board[8][8]) {
     return calculateLegalMoves(board, 'b');
 }
 
-// return a list of all the moves available to white
+// 흰 돌을 놓을 수 있는 자리를 반환
 std::vector<std::vector<int>> getWhiteLegalMoves(char board[8][8]) {
     return calculateLegalMoves(board, 'w');
 }
 
-// for the passed-in player, print all legal moves (displayed on board update)
+// player가 돌을 놓을 수 있는 자리를 출력한다.
 void printLegalMoves(char board[8][8], char player) {
     if (player == 'b') {
         std::cout << "검은색이 갈 수 있는 좌표는\n";
@@ -230,7 +196,7 @@ void printLegalMoves(char board[8][8], char player) {
     }
 }
 
-// pass in a generated move list to "pretty print" them
+// move_list에 저장된 돌을 놓을 수 있는 자리를 출력한다.
 void printLegalMoves(std::vector<std::vector<int>> move_list) {
     for (const auto& vec : move_list) {
         std::cout << "(" << vec[0] << "," << vec[1] << ")  ";
@@ -238,7 +204,7 @@ void printLegalMoves(std::vector<std::vector<int>> move_list) {
     std::cout << std::endl;
 }
 
-// overload the << operator to "pretty print" the board
+// board를 출력한다.
 std::ostream& operator<<(std::ostream& os, const char board[8][8]) {
     std::cout << "   0  1  2  3  4  5  6  7\n";
     for (int i = 0; i < 8; ++i) {
@@ -251,12 +217,12 @@ std::ostream& operator<<(std::ostream& os, const char board[8][8]) {
     return os;
 }
 
-// used to determine if the game is ended, makes sure at least 1 player has a move to make
+// 두 플레이어 모두 돌을 놓을 수 있는 자리가 없으면 게임을 종료한다.
 bool isGameOver(char board[8][8]) {
     return getBlackLegalMoves(board).empty() && getWhiteLegalMoves(board).empty();
 }
 
-// go through whole board, and count pieces of passed-in player
+// player의 점수를 계산한다.
 int getScore(char board[8][8], char player) {
     int total = 0;
     for (int i = 0; i < 8; ++i)
@@ -267,7 +233,7 @@ int getScore(char board[8][8], char player) {
     return total;
 }
 
-// "pretty print" the winner of the game at the end of the game loop
+// 게임의 결과를 출력한다.
 void printWinner(char(&board)[8][8]) {
     int white_total = getScore(board, 'w');
     int black_total = getScore(board, 'b');
@@ -284,7 +250,6 @@ void printWinner(char(&board)[8][8]) {
 
 // heursitic used to give value to varying states of the game
 int heuristic(char board[8][8]) {
-
     // intialize black and white total
     int b_total = 0;
     int w_total = 0;
@@ -322,7 +287,6 @@ int heuristic(char board[8][8]) {
     if (board[7][7] == 'b') {
         b_total += 10;
     }
-
     // subtract white's total from black, let black be the maximizer
     return (b_total - w_total);
 }
@@ -450,6 +414,7 @@ int minimax(Node* position, int depth, bool maximizing_player) {
     }
 }
 
+// 메인함수
 int main() {
     std::cout << "오델로 CLI 프로그램입니다.\n";
 
@@ -469,6 +434,7 @@ int main() {
     char player = 'b'; // black always goes first
     std::regex move_input_pattern("[0-7] [0-7]"); // regex for row/col input
 
+    // AI 모드
     if (PLAY_AI) {
         std::regex player_selection_pattern("w|b");
         std::cout << "흰색 또는 검은색 돌을 선택해주세요 (w, b) : ";
@@ -532,13 +498,11 @@ int main() {
                         continue;
                     }
                     else {
-                        // user_input = [<some num>, " ", <some num>], nums will be at indices 0 and 2
-                        // subtract '0's ascii value (48) from the user nums to get the real integer
+                        // 문자열 좌표를 숫자로 변환한다.
                         int row = user_input[0] - '0';
                         int col = user_input[2] - '0';
 
                         try {
-                            // if the inserted move is legal, make the move
                             if (isLegalMove(board, move_list, row, col, player)) {
                                 makeMove(board, row, col, player);
                             }
@@ -555,16 +519,12 @@ int main() {
                     }
 
                 }
-                // user has finished turn
-
             }
-            else { // AI turn
+            else { 
                 auto gametree = CreateTree(board, MINIMAX_DEPTH, player); // game tree representing MINIMAX_DEPTH decisions
                 bool maximizer = (player == 'b') ? true : false;
 
-                // find optimal value
                 int optimial_val = minimax(gametree, MINIMAX_DEPTH, -99999999, 99999999, maximizer);
-                //int optimial_val = minimax(gametree, MINIMAX_DEPTH, maximizer);
 
                 if (DEBUG_MODE) {
                     std::cout << "DEBUG: AI considered " << gametree->child_count << " initial moves for this board configuration.\n";
@@ -575,10 +535,7 @@ int main() {
                     std::cout << '\n';
                 }
 
-                //std::cout << "Optimal val: " << optimial_val << '\n';
-                // loop through children of root node to find the node with the optimal value
                 for (int i = 0; i < gametree->child_count; ++i) {
-                    //std::cout << gametree->children[i]->val << '\n';
                     if (gametree->children[i]->val == optimial_val) {
                         bool same_config = true;
                         for (int j = 0; j < 7; ++j) {
@@ -587,12 +544,10 @@ int main() {
                                     same_config = false;
                             }
                         }
-                        //std::cout << "the " << i << "th child of gametree has the optimizal value.\n";
-
-                        // copy this optimial choice of node's state into the main game board
+                        
                         if (!same_config)
                             std::memcpy(board, gametree->children[i]->state, 8 * 8 * sizeof(char));
-                        else { // if no good move for ai, just pick the first move from the legal move list
+                        else {
                             makeMove(board, move_list[0][0], move_list[0][1], player);
                         }
                         break;
@@ -609,22 +564,21 @@ int main() {
         }
 
     }
-    else { // Playing 2 player game
+    else { // Player2 모드
         while (!isGameOver(board)) {
             std::vector<std::vector<int>> move_list = calculateLegalMoves(board, player);
 
-            std::cout << ((player == 'w') ? "(흰색) 움직일 수 있는 곳 " : "(검은색) 움직일 수 있는 곳\n");
+            std::cout << board;
+
+            std::cout << ((player == 'w') ? "(흰색) 움직일 수 있는 곳\n" : "(검은색) 움직일 수 있는 곳\n");
             printLegalMoves(move_list);
-            std::cout << board; // Show board
 
             if (player == 'b' && getBlackLegalMoves(board).size() == 0) {
-                //std::cout << "Black is out of moves, PASS to White.\n";
                 player = 'w';
                 continue;
             }
 
             if (player == 'w' && getWhiteLegalMoves(board).size() == 0) {
-                //std::cout << "White is out of moves, PASS to Black.\n";
                 player = 'b';
                 continue;
             }
@@ -634,15 +588,12 @@ int main() {
 
             std::string user_input;
             std::getline(std::cin, user_input);
-            //std::cout << "You entered: " << user_input << '\n';
 
             if (!std::regex_match(user_input, move_input_pattern)) {
                 std::cout << "\nerror : y x 형태로 입력해야 합니다. (1 ~ n)\n";
                 continue;
             }
 
-            // user_input = [<some num>, " ", <some num>], nums will be at indices 0 and 2
-            // subtract '0's ascii value (48) from the user nums to get the real integer
             int row = user_input[0] - '0';
             int col = user_input[2] - '0';
 
@@ -664,14 +615,14 @@ int main() {
             int white_total = getScore(board, 'w');
             int black_total = getScore(board, 'b');
 
-            std::cout << "검은색 총점 : " << black_total << '\n';
-            std::cout << "흰색 총점 : " << white_total << "\n\n";
+            std::cout << "\n검은색   총점 : " << black_total << '\n';
+            std::cout << "흰색     총점 : " << white_total << "\n";
 
             player = (player == 'w') ? 'b' : 'w';
         }
     }
 
-    std::cout << board; // Show final board
+    std::cout << board;
     printWinner(board);
     return 0;
 }
