@@ -3,6 +3,7 @@
 
 // 메인함수
 int main() {
+    std::cout << "객체지향설계 텀프로젝트 11조\n";
     std::cout << "오델로 CLI 프로그램입니다.\n";
 
     // board 초기화
